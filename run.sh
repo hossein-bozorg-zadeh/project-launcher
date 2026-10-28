@@ -25,21 +25,6 @@ PROJECTS=(
   "GRMTB|python|GitHub/GitLab release monitor Telegram bot|"
   "tg-dl|tgdl|Download-manager Telegram bot (aria2 + yt-dlp + Telethon)|"
   "subsource-telegram-bot|worker|SubSource subtitle bot on Cloudflare Workers|subsource-telegram-bot,Default Project"
-  "hossein-bozorg-zadeh.github.io|site|Portfolio website (static)|"
-  "wwuploader|legacy|Legacy 2022 Telegram uploader bot (python-telegram-bot v12)|"
-  "hossein-bozorg-zadeh|docs|GitHub profile README (nothing to run)|"
-  "sub|docs|Placeholder repo (only a LICENSE)|"
-)
-
-FORKS=(
-  "mihon|Free and open source manga reader for Android"
-  "extensions|Mihon/Tachiyomi source extensions"
-  "extensions-source|Source code of the extensions"
-  "mihonwebsite|Official website for the Mihon app"
-  "mihon-preview|Mihon preview builds"
-  "BPB-Worker-Panel|Cloudflare Worker subscription panel"
-  "Ssh-User-management|PHP VPN user management panel"
-  "aria2|The aria2 downloader itself (C++)"
 )
 
 c_green='\033[0;32m'; c_yellow='\033[1;33m'; c_cyan='\033[0;36m'; c_dim='\033[2m'; c_off='\033[0m'
@@ -59,7 +44,7 @@ find_project_dir() {
   repo="$1"; extra="$2"
   roots=()
   [ -n "${PROJECTS_DIR:-}" ] && roots+=("$PROJECTS_DIR")
-  roots+=("$DEFAULT_PROJECTS_DIR" "$(pwd)")
+  roots+=("$DEFAULT_PROJECTS_DIR" "$(cd "$DEFAULT_PROJECTS_DIR/.." && pwd)" "$(pwd)")
   for base in "$HOME/Documents" "$HOME/projects" "$HOME/Projects" "$HOME/code"; do
     [ -d "$base" ] && roots+=("$base")
   done
@@ -175,29 +160,7 @@ run_worker() {
   if [ "${DRY_RUN:-0}" = "1" ]; then echo "(dry-run) npm run dev"; else npm run dev; fi
 }
 
-run_site() {
-  _py="$(python_bin)"
-  if [ -n "$_py" ]; then
-    step "Serving at http://localhost:8080 (Ctrl+C to stop)"
-    if [ "${DRY_RUN:-0}" = "1" ]; then echo "(dry-run) $_py -m http.server 8080"; else "$_py" -m http.server 8080; fi
-  elif have npx; then
-    step "Serving at http://localhost:8080 (Ctrl+C to stop)"
-    if [ "${DRY_RUN:-0}" = "1" ]; then echo "(dry-run) npx serve -l 8080"; else npx serve -l 8080; fi
-  else
-    warn "Neither Python nor npx found — open index.html directly in a browser (fetch() needs a server, so some parts won't load)."
-  fi
-}
-
-run_legacy() {
-  _py="$(python_bin)"
-  [ -z "$_py" ] && { warn "Python is not installed."; return 1; }
-  warn "wwuploader targets python-telegram-bot v12 (2022) and will not run on v20+. Only use it inside a pinned v12 virtualenv."
-  step "Starting uploader.py (Ctrl+C to stop)"
-  if [ "${DRY_RUN:-0}" = "1" ]; then echo "(dry-run) $_py uploader.py"; else "$_py" uploader.py; fi
-}
-
-show_menu() {
-  echo ""
+show_menu() {  echo ""
   printf "${c_cyan}Hossein's project launcher${c_off}\n"
   echo "-------------------------------------------"
   i=1
@@ -210,37 +173,10 @@ show_menu() {
     i=$((i + 1))
   done
   echo "-------------------------------------------"
-  printf "  %2d) Forked repos (clone/open only)\n" "$i"
-  forks_index=$i
-  i=$((i + 1))
   printf "  %2d) Quit\n" "$i"
   quit_index=$i
   echo ""
-  printf "Which project do you want to run? [1-%d, %d=forks, %d=quit] " "$((forks_index - 1))" "$forks_index" "$quit_index"
-}
-
-show_forks() {
-  echo ""
-  printf "${c_cyan}Forked repos${c_off} ${c_dim}(other people's projects you keep around)${c_off}\n"
-  i=1
-  for item in "${FORKS[@]}"; do
-    name="${item%%|*}"; desc="${item#*|}"
-    printf "  %2d) %-22s %s\n" "$i" "$name" "$desc"
-    i=$((i + 1))
-  done
-  echo ""
-  printf "Clone which? [1-%d, Enter= back] " "$((i - 1))"
-  read -r pick || return 0
-  [ -z "$pick" ] && return 0
-  case "$pick" in
-    ''|*[!0-9]*) warn "Not a number."; return 0 ;;
-  esac
-  if [ "$pick" -lt 1 ] || [ "$pick" -gt $((${#FORKS[@]})) ]; then warn "Out of range."; return 0; fi
-  item="${FORKS[$((pick - 1))]}"
-  repo="${item%%|*}"
-  dir="$(ensure_checkout "$repo" "")" || return 0
-  info "$repo is at: $dir"
-  info "Check that repo's own README for how to build it — it is a fork of someone else's project."
+  printf "Which project do you want to run? [1-%d, %d=quit] " "$((quit_index - 1))" "$quit_index"
 }
 
 launch() {
@@ -259,9 +195,6 @@ launch() {
     python) run_python ;;
     tgdl)   run_tgdl ;;
     worker) run_worker ;;
-    site)   run_site ;;
-    legacy) run_legacy ;;
-    docs)   info "Nothing to run — this repo is documentation. Open README.md to edit it." ;;
     *)      warn "Unknown project type: $type" ;;
   esac
 }
@@ -279,10 +212,6 @@ main() {
     if [ "$pick" -eq "$quit_index" ]; then
       info "Bye!"
       exit 0
-    fi
-    if [ "$pick" -eq "$forks_index" ]; then
-      show_forks
-      continue
     fi
     if [ "$pick" -ge 1 ] && [ "$pick" -le ${#PROJECTS[@]} ]; then
       launch "${PROJECTS[$((pick - 1))]}"
