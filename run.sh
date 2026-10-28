@@ -28,9 +28,11 @@ PROJECTS=(
 )
 
 c_green='\033[0;32m'; c_yellow='\033[1;33m'; c_cyan='\033[0;36m'; c_dim='\033[2m'; c_off='\033[0m'
-info()  { printf "${c_green}[i]${c_off} %s\n" "$*"; }
-warn()  { printf "${c_yellow}[!]${c_off} %s\n" "$*"; }
-step()  { printf "\n${c_cyan}==> ${c_off}%s\n" "$*"; }
+# Log helpers write to stderr: project_dir() runs inside $(…) so anything on
+# stdout would be captured as its return value instead of shown.
+info()  { printf "${c_green}[i]${c_off} %s\n" "$*" >&2; }
+warn()  { printf "${c_yellow}[!]${c_off} %s\n" "$*" >&2; }
+step()  { printf "\n${c_cyan}==> ${c_off}%s\n" "$*" >&2; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -41,11 +43,11 @@ python_bin() {
 dry() { [ "${DRY_RUN:-0}" = "1" ]; }
 
 # --------------------------------------------------------------------------
-# Every project is cloned by this script into PROJECTS_ROOT (default: next to
-# run.sh). An existing clone is reused as-is; nothing else on disk is hunted
-# for or reused.
+# The launcher only RUNS projects: each one must be cloned into PROJECTS_ROOT
+# (default: next to run.sh). If it is missing, the exact clone command is
+# printed — the script never clones on its own.
 # --------------------------------------------------------------------------
-ensure_checkout() {
+project_dir() {
   repo="$1"
   target="$PROJECTS_ROOT/$repo"
 
@@ -54,24 +56,9 @@ ensure_checkout() {
     return 0
   fi
 
-  warn "'$repo' is not cloned yet — it has to be cloned before it can run."
-  if dry; then
-    echo "(dry-run) git clone https://github.com/$GITHUB_USER/$repo.git $target"
-    return 1
-  fi
-  printf "Clone https://github.com/%s/%s into %s ? [Y/n] " "$GITHUB_USER" "$repo" "$target"
-  read -r answer || exit 0
-  case "$answer" in
-    n*|N*) return 1 ;;
-  esac
-
-  mkdir -p "$PROJECTS_ROOT"
-  if have gh; then
-    gh repo clone "$GITHUB_USER/$repo" "$target" || return 1
-  else
-    git clone "https://github.com/$GITHUB_USER/$repo.git" "$target" || return 1
-  fi
-  echo "$target"
+  warn "'$repo' is not in $PROJECTS_ROOT — clone it first:"
+  echo "      git clone https://github.com/$GITHUB_USER/$repo.git $target" >&2
+  return 1
 }
 
 # --------------------------------------------------------------------------
@@ -306,7 +293,7 @@ launch() {
   type="${rest%%|*}"; desc="${rest#*|}"
 
   step "$name — $desc"
-  dir="$(ensure_checkout "$name")" || { info "Skipped."; return 0; }
+  dir="$(project_dir "$name")" || { info "Skipped."; return 0; }
   cd "$dir" || return 1
   info "Project directory: $dir"
 

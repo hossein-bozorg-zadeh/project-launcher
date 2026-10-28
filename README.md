@@ -32,11 +32,16 @@ Which project do you want to run? [1-3, 4=quit]
 
 ## How checkouts work
 
-The launcher does not reuse random folders from your disk: **running a project
-requires a clone**, and the launcher makes one for you on request into
-`PROJECTS_ROOT` (default: the folder `run.sh` lives in; override with
-`PROJECTS_DIR=…`). An existing clone there is reused as-is — run `git pull`
-inside it to update.
+The launcher only **runs** projects — it never clones. Each project must be
+cloned into `PROJECTS_ROOT` (default: the folder `run.sh` lives in; override
+with `PROJECTS_DIR=…`). Pick a project that isn't there and the launcher simply
+prints the exact `git clone` command to run; an existing clone is started
+directly. Run `git pull` inside a clone to update it.
+
+```bash
+# example — what the launcher prints when GRMTB is missing:
+git clone https://github.com/hossein-bozorg-zadeh/GRMTB.git /path/to/project-launcher/GRMTB
+```
 
 ## What it does per project
 
