@@ -32,16 +32,13 @@ Which project do you want to run? [1-3, 4=quit]
 
 ## How checkouts work
 
-The launcher only **runs** projects — it never clones. Each project must be
-cloned into `PROJECTS_ROOT` (default: the folder `run.sh` lives in; override
-with `PROJECTS_DIR=…`). Pick a project that isn't there and the launcher simply
-prints the exact `git clone` command to run; an existing clone is started
-directly. Run `git pull` inside a clone to update it.
+The launcher handles everything by itself — no prompts about cloning:
 
-```bash
-# example — what the launcher prints when GRMTB is missing:
-git clone https://github.com/hossein-bozorg-zadeh/GRMTB.git /path/to/project-launcher/GRMTB
-```
+- The project is **cloned automatically** into `PROJECTS_ROOT` (default: the
+  folder `run.sh` lives in; override with `PROJECTS_DIR=…`) if it isn't there.
+- An existing clone is **updated with `git pull --ff-only`** on every run
+  (best-effort — offline or with local changes, the clone is used as it is).
+- Then dependencies are installed and the project starts.
 
 ## What it does per project
 

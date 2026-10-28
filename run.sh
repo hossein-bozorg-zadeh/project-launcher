@@ -43,22 +43,39 @@ python_bin() {
 dry() { [ "${DRY_RUN:-0}" = "1" ]; }
 
 # --------------------------------------------------------------------------
-# The launcher only RUNS projects: each one must be cloned into PROJECTS_ROOT
-# (default: next to run.sh). If it is missing, the exact clone command is
-# printed — the script never clones on its own.
+# The launcher does the whole run by itself: the project is cloned
+# automatically if missing (into PROJECTS_ROOT, default: next to run.sh) and
+# updated with git pull before it starts — no confirmation prompts.
 # --------------------------------------------------------------------------
-project_dir() {
+ensure_checkout() {
   repo="$1"
   target="$PROJECTS_ROOT/$repo"
 
   if [ -d "$target" ]; then
+    step "Updating the existing clone"
+    if dry; then
+      echo "(dry-run) git -C $target pull --ff-only" >&2
+    else
+      git -C "$target" pull --ff-only >/dev/null 2>&1 || warn "Could not update (offline or local changes?) — using the clone as it is."
+    fi
     echo "$target"
     return 0
   fi
 
-  warn "'$repo' is not in $PROJECTS_ROOT — clone it first:"
-  echo "      git clone https://github.com/$GITHUB_USER/$repo.git $target" >&2
-  return 1
+  warn "'$repo' is not cloned yet — cloning it for you."
+  if dry; then
+    echo "(dry-run) git clone https://github.com/$GITHUB_USER/$repo.git $target" >&2
+    return 1
+  fi
+
+  mkdir -p "$PROJECTS_ROOT"
+  if have gh; then
+    gh repo clone "$GITHUB_USER/$repo" "$target" || return 1
+  else
+    git clone "https://github.com/$GITHUB_USER/$repo.git" "$target" || return 1
+  fi
+  info "Cloned into $target."
+  echo "$target"
 }
 
 # --------------------------------------------------------------------------
@@ -293,7 +310,7 @@ launch() {
   type="${rest%%|*}"; desc="${rest#*|}"
 
   step "$name — $desc"
-  dir="$(project_dir "$name")" || { info "Skipped."; return 0; }
+  dir="$(ensure_checkout "$name")" || { info "Skipped."; return 0; }
   cd "$dir" || return 1
   info "Project directory: $dir"
 
