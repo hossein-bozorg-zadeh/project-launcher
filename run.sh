@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# project-launcher — interactive menu to run Hossein's projects anywhere.
+# project-launcher — interactive menu to run Hossein's bot projects anywhere.
 #
 # Works on macOS, Linux, and Windows (Git Bash or WSL). Bash 3.2 compatible.
 #
-#   bash run.sh                  # interactive menu
-#   PROJECTS_DIR=~/code bash run.sh   # look for projects in a custom folder
-#   DRY_RUN=1 bash run.sh        # print the command instead of executing it
+#   bash run.sh                       # interactive menu
+#   PROJECTS_DIR=~/code bash run.sh   # clone/keep the projects somewhere else
+#   DRY_RUN=1 bash run.sh             # print the commands instead of executing
 #
 # One-line remote usage:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/hossein-bozorg-zadeh/project-launcher/main/run.sh)
@@ -15,16 +15,16 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GITHUB_USER="hossein-bozorg-zadeh"
-DEFAULT_PROJECTS_DIR="$SCRIPT_DIR"
+PROJECTS_ROOT="${PROJECTS_DIR:-$SCRIPT_DIR}"
 
 # --------------------------------------------------------------------------
 # Project registry.
-# fields: repo_name | type | description | extra local directory names to try
+# fields: repo_name | type | description
 # --------------------------------------------------------------------------
 PROJECTS=(
-  "GRMTB|python|GitHub/GitLab release monitor Telegram bot|"
-  "tg-dl|tgdl|Download-manager Telegram bot (aria2 + yt-dlp + Telethon)|"
-  "subsource-telegram-bot|worker|SubSource subtitle bot on Cloudflare Workers|subsource-telegram-bot,Default Project"
+  "GRMTB|python|GitHub/GitLab release monitor Telegram bot"
+  "tg-dl|tgdl|Download-manager Telegram bot (aria2 + yt-dlp + Telethon)"
+  "subsource-telegram-bot|worker|SubSource subtitle bot on Cloudflare Workers"
 )
 
 c_green='\033[0;32m'; c_yellow='\033[1;33m'; c_cyan='\033[0;36m'; c_dim='\033[2m'; c_off='\033[0m'
@@ -38,62 +38,194 @@ python_bin() {
   if have python3; then echo "python3"; elif have python; then echo "python"; else echo ""; fi
 }
 
-# Find a local checkout: PROJECTS_DIR (if set), the common roots, else offer a clone.
-# extra is a comma-separated list of alternative directory names (may contain spaces).
-find_project_dir() {
-  repo="$1"; extra="$2"
-  roots=()
-  [ -n "${PROJECTS_DIR:-}" ] && roots+=("$PROJECTS_DIR")
-  roots+=("$DEFAULT_PROJECTS_DIR" "$(cd "$DEFAULT_PROJECTS_DIR/.." && pwd)" "$(pwd)")
-  for base in "$HOME/Documents" "$HOME/projects" "$HOME/Projects" "$HOME/code"; do
-    [ -d "$base" ] && roots+=("$base")
-  done
+dry() { [ "${DRY_RUN:-0}" = "1" ]; }
 
-  dirs=("$repo")
-  if [ -n "$extra" ]; then
-    _oldIFS="$IFS"; IFS=','
-    for d in $extra; do dirs+=("$d"); done   # shellcheck disable=SC2086
-    IFS="$_oldIFS"
-  fi
-
-  for dir in "${dirs[@]}"; do
-    [ -n "$dir" ] || continue
-    for root in "${roots[@]}"; do
-      if [ -d "$root/$dir" ]; then
-        echo "$root/$dir"
-        return 0
-      fi
-    done
-  done
-  return 1
-}
-
+# --------------------------------------------------------------------------
+# Every project is cloned by this script into PROJECTS_ROOT (default: next to
+# run.sh). An existing clone is reused as-is; nothing else on disk is hunted
+# for or reused.
+# --------------------------------------------------------------------------
 ensure_checkout() {
-  _repo="$1"; _extra="$2"
-  if _dir="$(find_project_dir "$_repo" "$_extra")"; then
-    echo "$_dir"
+  repo="$1"
+  target="$PROJECTS_ROOT/$repo"
+
+  if [ -d "$target" ]; then
+    echo "$target"
     return 0
   fi
 
-  warn "'$_repo' is not on this machine yet."
-  _target="${PROJECTS_DIR:-$DEFAULT_PROJECTS_DIR}/$_repo"
-  if [ "${DRY_RUN:-0}" = "1" ]; then
-    echo "(dry-run) clone https://github.com/$GITHUB_USER/$_repo into $_target"
+  warn "'$repo' is not cloned yet — it has to be cloned before it can run."
+  if dry; then
+    echo "(dry-run) git clone https://github.com/$GITHUB_USER/$repo.git $target"
     return 1
   fi
-  printf "Clone https://github.com/%s/%s into %s ? [Y/n] " "$GITHUB_USER" "$_repo" "$_target"
-  read -r _answer || exit 0
-  case "$_answer" in
+  printf "Clone https://github.com/%s/%s into %s ? [Y/n] " "$GITHUB_USER" "$repo" "$target"
+  read -r answer || exit 0
+  case "$answer" in
     n*|N*) return 1 ;;
-    *)
-      mkdir -p "$(dirname "$_target")"
-      if have gh; then
-        gh repo clone "$GITHUB_USER/$_repo" "$_target" || return 1
+  esac
+
+  mkdir -p "$PROJECTS_ROOT"
+  if have gh; then
+    gh repo clone "$GITHUB_USER/$repo" "$target" || return 1
+  else
+    git clone "https://github.com/$GITHUB_USER/$repo.git" "$target" || return 1
+  fi
+  echo "$target"
+}
+
+# --------------------------------------------------------------------------
+# Worker helpers (subsource-telegram-bot)
+# --------------------------------------------------------------------------
+
+# Create .dev.vars for the Worker by prompting for the two secrets; the
+# Telegram webhook secret is generated locally so nothing else is needed.
+ensure_worker_devvars() {
+  if [ -f .dev.vars ]; then
+    info ".dev.vars found."
+    return 0
+  fi
+  if dry; then
+    echo "(dry-run) would prompt for BOT_TOKEN / SUBSOURCE_API_KEY and write .dev.vars"
+    return 0
+  fi
+
+  step "Worker configuration — writing .dev.vars"
+  if [ -n "${BOT_TOKEN:-}" ]; then
+    bot_token="$BOT_TOKEN"
+    info "Using BOT_TOKEN from the environment."
+  else
+    printf "Telegram BOT_TOKEN (from @BotFather): "
+    read -rs bot_token; printf "\n"
+  fi
+  if [ -n "${SUBSOURCE_API_KEY:-}" ]; then
+    api_key="$SUBSOURCE_API_KEY"
+    info "Using SUBSOURCE_API_KEY from the environment."
+  else
+    printf "SUBSOURCE_API_KEY: "
+    read -rs api_key; printf "\n"
+  fi
+  if [ -z "$bot_token" ] || [ -z "$api_key" ]; then
+    warn "Both tokens are required — aborting configuration."
+    return 1
+  fi
+
+  if have openssl; then
+    webhook_secret="$(openssl rand -hex 32)"
+    info "Generated a random TELEGRAM_WEBHOOK_SECRET."
+  else
+    printf "TELEGRAM_WEBHOOK_SECRET (min 16 chars): "
+    read -rs webhook_secret; printf "\n"
+  fi
+
+  (
+    umask 177
+    cat > .dev.vars <<EOF
+BOT_TOKEN=$bot_token
+SUBSOURCE_API_KEY=$api_key
+TELEGRAM_WEBHOOK_SECRET=$webhook_secret
+EOF
+  )
+  info "Wrote .dev.vars (permissions 600)."
+}
+
+# Load / ask for the Cloudflare API token used by wrangler, so deploying never
+# needs the interactive browser login. Saved next to this script (mode 600).
+ensure_cloudflare_token() {
+  if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
+    info "Using CLOUDFLARE_API_TOKEN from the environment."
+    return 0
+  fi
+
+  cf_file="$SCRIPT_DIR/.cloudflare.env"
+  if [ -f "$cf_file" ]; then
+    # shellcheck disable=SC1090
+    . "$cf_file"
+    export CLOUDFLARE_API_TOKEN
+    [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] && export CLOUDFLARE_ACCOUNT_ID
+    info "Using the saved Cloudflare API token from $cf_file."
+    return 0
+  fi
+
+  if dry; then
+    echo "(dry-run) would prompt for a Cloudflare API token, verify it, and save it to $cf_file"
+    return 1
+  fi
+
+  step "Cloudflare API token"
+  echo "Create one at https://dash.cloudflare.com/profile/api-tokens (template 'Edit Cloudflare Workers')."
+  printf "Paste the API token: "
+  read -rs cf_token; printf "\n"
+  if [ -z "$cf_token" ]; then
+    warn "No token entered."
+    return 1
+  fi
+
+  if have curl; then
+    step "Verifying the token"
+    verify="$(curl -s -H "Authorization: Bearer $cf_token" \
+      "https://api.cloudflare.com/client/v4/user/tokens/verify" || true)"
+    case "$verify" in
+      *'"success":true'*) info "Token is valid." ;;
+      *)
+        warn "Cloudflare rejected the token (or the check failed). Nothing was saved."
+        return 1
+        ;;
+    esac
+  fi
+
+  printf "Cloudflare ACCOUNT_ID (optional, Enter to skip): "
+  read -r cf_account || cf_account=""
+
+  (
+    umask 177
+    {
+      echo "CLOUDFLARE_API_TOKEN=$cf_token"
+      [ -n "$cf_account" ] && echo "CLOUDFLARE_ACCOUNT_ID=$cf_account"
+    } > "$cf_file"
+  )
+  export CLOUDFLARE_API_TOKEN
+  [ -n "$cf_account" ] && export CLOUDFLARE_ACCOUNT_ID
+  info "Saved to $cf_file (permissions 600). Delete the file to be asked again."
+}
+
+run_worker() {
+  if ! have npm; then warn "Node.js/npm is not installed."; return 1; fi
+  if [ ! -d node_modules ]; then
+    step "Installing npm dependencies"
+    if dry; then echo "(dry-run) npm install"; else npm install; fi
+  fi
+
+  echo ""
+  echo "  1) Run locally   (wrangler dev on http://localhost:8787)"
+  echo "  2) Deploy to Cloudflare (uses your Cloudflare API token — no browser login)"
+  echo "  b) Back"
+  printf "What do you want to do with the Worker? [1/2/b] "
+  read -r wchoice || return 0
+
+  case "$wchoice" in
+    1)
+      step "Applying local D1 migrations"
+      if dry; then
+        echo "(dry-run) npx wrangler d1 migrations apply subsource-bot --local"
       else
-        git clone "https://github.com/$GITHUB_USER/$_repo.git" "$_target" || return 1
+        npx wrangler d1 migrations apply subsource-bot --local || warn "Local migrations failed — /health will return 503 until they are applied."
       fi
-      echo "$_target"
+      ensure_worker_devvars || return 1
+      step "Starting the Worker locally (Ctrl+C to stop)"
+      if dry; then echo "(dry-run) npm run dev"; else npm run dev; fi
       ;;
+    2)
+      ensure_worker_devvars || return 1
+      ensure_cloudflare_token || { info "Deploy skipped."; return 0; }
+      step "Deploying (deploy.sh creates the D1 database, applies migrations, uploads secrets and registers the webhook)"
+      if dry; then
+        echo "(dry-run) bash deploy.sh --yes --skip-install"
+      else
+        bash deploy.sh --yes --skip-install
+      fi
+      ;;
+    *) info "Back to the menu." ;;
   esac
 }
 
@@ -102,13 +234,13 @@ run_python() {
   if [ -z "$_py" ]; then warn "Python is not installed."; return 1; fi
   if [ ! -f "requirements.txt" ]; then warn "requirements.txt not found."; return 1; fi
   step "Installing Python dependencies"
-  if [ "${DRY_RUN:-0}" = "1" ]; then
+  if dry; then
     echo "(dry-run) $_py -m pip install -r requirements.txt"
   else
     "$_py" -m pip install -q -r requirements.txt || warn "pip install failed — continuing anyway"
   fi
   step "Starting the bot (Ctrl+C to stop)"
-  if [ "${DRY_RUN:-0}" = "1" ]; then
+  if dry; then
     echo "(dry-run) BOT_TOKEN=… OWNER_ID=… $_py bot.py"
   else
     if [ -z "${BOT_TOKEN:-}" ] || [ -z "${OWNER_ID:-}" ]; then
@@ -123,18 +255,20 @@ run_tgdl() {
   if [ ! -f ".env" ]; then
     warn "No .env found — the one-shot wizard configures everything (deps, .env, aria2, systemd):"
     echo "      bash setup.sh"
-    if [ "${DRY_RUN:-0}" != "1" ]; then
-      printf "Run the wizard now? [Y/n] "
-      read -r _answer || return 0
-      case "$_answer" in n*|N*) return 0 ;; esac
-      bash setup.sh
+    if dry; then
+      echo "(dry-run) bash setup.sh"
+      return 0
     fi
+    printf "Run the wizard now? [Y/n] "
+    read -r answer || return 0
+    case "$answer" in n*|N*) return 0 ;; esac
+    bash setup.sh
     return 0
   fi
   if have aria2c; then
     if ! { have pgrep && pgrep -x aria2c >/dev/null 2>&1; }; then
       step "Starting aria2 daemon in the background"
-      if [ "${DRY_RUN:-0}" = "1" ]; then echo "(dry-run) aria2c --conf-path=aria2.conf"; else
+      if dry; then echo "(dry-run) aria2c --conf-path=aria2.conf"; else
         aria2c --conf-path=aria2.conf >/dev/null 2>&1 &
       fi
     fi
@@ -144,30 +278,17 @@ run_tgdl() {
   _py="$(python_bin)"
   [ -z "$_py" ] && { warn "Python is not installed."; return 1; }
   step "Starting tg-dl bot (Ctrl+C to stop)"
-  if [ "${DRY_RUN:-0}" = "1" ]; then echo "(dry-run) $_py bot.py"; else "$_py" bot.py; fi
+  if dry; then echo "(dry-run) $_py bot.py"; else "$_py" bot.py; fi
 }
 
-run_worker() {
-  if ! have npm; then warn "Node.js/npm is not installed."; return 1; fi
-  if [ ! -d node_modules ]; then
-    step "Installing npm dependencies"
-    if [ "${DRY_RUN:-0}" = "1" ]; then echo "(dry-run) npm install"; else npm install; fi
-  fi
-  if [ ! -f .dev.vars ]; then
-    warn "No .dev.vars — 'wrangler dev' will fail config validation until it exists (cp .dev.vars.example .dev.vars)."
-  fi
-  step "Starting the Worker locally on http://localhost:8787 (Ctrl+C to stop)"
-  if [ "${DRY_RUN:-0}" = "1" ]; then echo "(dry-run) npm run dev"; else npm run dev; fi
-}
-
-show_menu() {  echo ""
+show_menu() {
+  echo ""
   printf "${c_cyan}Hossein's project launcher${c_off}\n"
   echo "-------------------------------------------"
   i=1
   for item in "${PROJECTS[@]}"; do
     name="${item%%|*}"; rest="${item#*|}"
-    type="${rest%%|*}"; rest="${rest#*|}"
-    desc="${rest%%|*}"
+    type="${rest%%|*}"; desc="${rest#*|}"
     printf "  %2d) %-28s ${c_dim}(%s)${c_off}\n" "$i" "$name" "$type"
     printf "      %s\n" "$desc"
     i=$((i + 1))
@@ -182,12 +303,10 @@ show_menu() {  echo ""
 launch() {
   item="$1"
   name="${item%%|*}"; rest="${item#*|}"
-  type="${rest%%|*}"; rest="${rest#*|}"
-  desc="${rest%%|*}"; extra="${rest#*|}"
-  [ "$extra" = "$desc" ] && extra=""
+  type="${rest%%|*}"; desc="${rest#*|}"
 
   step "$name — $desc"
-  dir="$(ensure_checkout "$name" "$extra")" || { info "Skipped."; return 0; }
+  dir="$(ensure_checkout "$name")" || { info "Skipped."; return 0; }
   cd "$dir" || return 1
   info "Project directory: $dir"
 
@@ -201,7 +320,8 @@ launch() {
 
 main() {
   if ! have git; then warn "git is required (install it first)."; exit 1; fi
-  [ "${DRY_RUN:-0}" = "1" ] && info "DRY_RUN=1 — commands will be printed, not executed."
+  if dry; then info "DRY_RUN=1 — commands will be printed, not executed."; fi
+  info "Projects live in: $PROJECTS_ROOT (override with PROJECTS_DIR=…)"
 
   while true; do
     show_menu

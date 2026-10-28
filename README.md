@@ -1,9 +1,9 @@
 # project-launcher
 
 One script that runs Hossein's three bot projects on any OS. It shows an
-interactive menu, asks **which project you want to run**, finds the project on
-your machine (or clones it for you), installs what's missing, and starts it
-with the right command.
+interactive menu, asks **which project you want to run**, clones the project if
+it isn't on the machine yet, installs what's missing, and starts it with the
+right command.
 
 ## Run it
 
@@ -30,32 +30,53 @@ You'll see the menu:
 Which project do you want to run? [1-3, 4=quit]
 ```
 
+## How checkouts work
+
+The launcher does not reuse random folders from your disk: **running a project
+requires a clone**, and the launcher makes one for you on request into
+`PROJECTS_ROOT` (default: the folder `run.sh` lives in; override with
+`PROJECTS_DIR=…`). An existing clone there is reused as-is — run `git pull`
+inside it to update.
+
 ## What it does per project
 
 | Project | Action |
 | --- | --- |
 | **GRMTB** | `pip install -r requirements.txt`, warns if `BOT_TOKEN`/`OWNER_ID` are missing, then `python bot.py` |
 | **tg-dl** | If `.env` is missing it offers the `setup.sh` wizard; otherwise starts the aria2 daemon (if not running) and `python bot.py` |
-| **subsource-telegram-bot** | `npm install` when needed, then `npm run dev` (Wrangler on `localhost:8787`) — warns if `.dev.vars` is missing |
+| **subsource-telegram-bot** | Asks *run locally* or *deploy to Cloudflare* (see below) |
 
-## Where it looks for projects
+### The Worker: run locally or deploy with a Cloudflare API token
 
-The launcher searches, in order: `PROJECTS_DIR` (if set), the folder the script
-lives in, its parent folder, your current directory, and `~/Documents`,
-`~/projects`, `~/Projects`, `~/code`. For example `subsource-telegram-bot` is
-found either as a folder of that name or as `Default Project` inside those
-roots.
+Picking **subsource-telegram-bot** gives you two options:
 
-If the chosen project isn't on the machine, it asks for confirmation and clones
-it (using `gh` when available, plain `git` otherwise) into
-`PROJECTS_DIR` (default: next to the script).
+1. **Run locally** — applies the D1 migrations to the local database
+   (`wrangler d1 migrations apply --local`), creates `.dev.vars` on first run
+   (asks for `BOT_TOKEN` and `SUBSOURCE_API_KEY`, generates a random
+   `TELEGRAM_WEBHOOK_SECRET` itself), then starts `wrangler dev` on
+   `http://localhost:8787`.
+2. **Deploy to Cloudflare** — asks for a **Cloudflare API token** (create it at
+   [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens),
+   template *Edit Cloudflare Workers*), verifies it against the Cloudflare API,
+   and saves it next to the script in `.cloudflare.env` (mode `600`) so you are
+   never asked again. Wrangler picks the token up from the environment, so the
+   interactive browser login is never needed. It then runs `deploy.sh --yes`,
+   which creates/reuses the D1 database, applies all migrations, uploads the
+   secrets, deploys the Worker and registers the Telegram webhook.
+
+`ACCOUNT_ID` is optional — wrangler usually infers it from the token. Delete
+`.cloudflare.env` to be prompted again.
 
 ## Options
 
 ```bash
-PROJECTS_DIR=~/code bash run.sh   # custom folder for checkouts
+PROJECTS_DIR=~/code bash run.sh   # where the clones (and .cloudflare.env) live
 DRY_RUN=1 bash run.sh             # print commands instead of executing them
 ```
+
+Secrets handling: `.dev.vars` and `.cloudflare.env` are written with mode `600`
+and are covered by the projects' own `.gitignore` rules — they never get
+committed.
 
 ## OS support
 
@@ -63,4 +84,4 @@ The script is plain bash (3.2-compatible — the version macOS ships with):
 
 - **macOS / Linux** — works as-is.
 - **Windows** — run it from [Git Bash](https://git-scm.com/download/win) or
-  WSL. `python`/`python3` and `npm` must be reachable from that shell.
+  WSL. `python`/`python3`, `npm` and `git` must be reachable from that shell.
