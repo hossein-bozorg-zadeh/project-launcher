@@ -25,6 +25,7 @@ PROJECTS=(
   "GRMTB|python|GitHub/GitLab release monitor Telegram bot"
   "tg-dl|tgdl|Download-manager Telegram bot (aria2 + yt-dlp + Telethon)"
   "subsource-telegram-bot|worker|SubSource subtitle bot on Cloudflare Workers"
+  "invoice-manager|static|Persian invoice & finance manager — single-file HTML app"
 )
 
 c_green='\033[0;32m'; c_yellow='\033[1;33m'; c_cyan='\033[0;36m'; c_dim='\033[2m'; c_off='\033[0m'
@@ -285,6 +286,27 @@ run_tgdl() {
   if dry; then echo "(dry-run) $_py bot.py"; else "$_py" bot.py; fi
 }
 
+# --------------------------------------------------------------------------
+# Static helpers (invoice-manager)
+# --------------------------------------------------------------------------
+
+# A fully client-side single-file app — nothing to install, just open it.
+run_static() {
+  if [ ! -f index.html ]; then warn "index.html not found in the clone."; return 1; fi
+  step "Opening the app in your default browser"
+  case "$(uname -s)" in
+    Darwin)               open index.html ;;
+    CYGWIN*|MINGW*|MSYS*) cmd.exe //c start "" index.html 2>/dev/null \
+                          || explorer.exe index.html \
+                          || warn "Could not auto-open — double-click index.html." ;;
+    *)                    if have xdg-open; then xdg-open index.html
+                          else warn "No xdg-open found — open index.html manually."; return 1; fi ;;
+  esac
+  info "Data is saved in your browser's localStorage — also live at:"
+  info "https://$GITHUB_USER.github.io/invoice-manager/"
+  return 0
+}
+
 show_menu() {
   echo ""
   printf "${c_cyan}Hossein's project launcher${c_off}\n"
@@ -318,6 +340,7 @@ launch() {
     python) run_python ;;
     tgdl)   run_tgdl ;;
     worker) run_worker ;;
+    static) run_static ;;
     *)      warn "Unknown project type: $type" ;;
   esac
 }

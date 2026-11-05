@@ -1,6 +1,6 @@
 # project-launcher
 
-One script that runs Hossein's three bot projects on any OS. It shows an
+One script that runs Hossein's four projects on any OS. It shows an
 interactive menu, asks **which project you want to run**, clones the project if
 it isn't on the machine yet, installs what's missing, and starts it with the
 right command.
@@ -24,10 +24,11 @@ You'll see the menu:
   1) GRMTB                       (python)
   2) tg-dl                       (tgdl)
   3) subsource-telegram-bot      (worker)
+  4) invoice-manager             (static)
 -------------------------------------------
-  4) Quit
+  5) Quit
 
-Which project do you want to run? [1-3, 4=quit]
+Which project do you want to run? [1-4, 5=quit]
 ```
 
 ## How checkouts work
@@ -47,6 +48,17 @@ The launcher handles everything by itself — no prompts about cloning:
 | **GRMTB** | `pip install -r requirements.txt`, warns if `BOT_TOKEN`/`OWNER_ID` are missing, then `python bot.py` |
 | **tg-dl** | If `.env` is missing it offers the `setup.sh` wizard; otherwise starts the aria2 daemon (if not running) and `python bot.py` |
 | **subsource-telegram-bot** | Asks *run locally* or *deploy to Cloudflare* (see below) |
+| **invoice-manager** | Opens `index.html` in your default browser — that's it (see below) |
+
+### invoice-manager: just open it
+
+[Invoice manager](https://github.com/hossein-bozorg-zadeh/invoice-manager) is a
+fully client-side Persian (RTL) invoice & finance manager — a single
+`index.html`, no build step, no dependencies. The launcher has nothing to
+install: it clones the repo and opens the file in your browser. All data lives
+in that browser's localStorage, and there is also a hosted copy at
+<https://hossein-bozorg-zadeh.github.io/invoice-manager/> — both stay separate
+(same origin rules: the Pages copy and the local clone see different data).
 
 ### The Worker: run locally or deploy with a Cloudflare API token
 
