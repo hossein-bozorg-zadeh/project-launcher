@@ -1,6 +1,6 @@
 # project-launcher
 
-One script that runs Hossein's four projects on any OS. It shows an
+One script that runs Hossein's five projects on any OS. It shows an
 interactive menu, asks **which project you want to run**, clones the project if
 it isn't on the machine yet, installs what's missing, and starts it with the
 right command.
@@ -25,10 +25,11 @@ You'll see the menu:
   2) tg-dl                       (tgdl)
   3) subsource-telegram-bot      (worker)
   4) invoice-manager             (static)
+  5) wall-vault                  (static)
 -------------------------------------------
-  5) Quit
+  6) Quit
 
-Which project do you want to run? [1-4, 5=quit]
+Which project do you want to run? [1-5, 6=quit]
 ```
 
 ## How checkouts work
@@ -49,16 +50,25 @@ The launcher handles everything by itself — no prompts about cloning:
 | **tg-dl** | If `.env` is missing it offers the `setup.sh` wizard; otherwise starts the aria2 daemon (if not running) and `python bot.py` |
 | **subsource-telegram-bot** | Asks *run locally* or *deploy to Cloudflare* (see below) |
 | **invoice-manager** | Opens `index.html` in your default browser — that's it (see below) |
+| **wall-vault** | Opens `index.html` in your default browser — that's it (see below) |
 
-### invoice-manager: just open it
+### Static apps: just open it
 
-[Invoice manager](https://github.com/hossein-bozorg-zadeh/invoice-manager) is a
-fully client-side Persian (RTL) invoice & finance manager — a single
-`index.html`, no build step, no dependencies. The launcher has nothing to
-install: it clones the repo and opens the file in your browser. All data lives
-in that browser's localStorage, and there is also a hosted copy at
-<https://hossein-bozorg-zadeh.github.io/invoice-manager/> — both stay separate
-(same origin rules: the Pages copy and the local clone see different data).
+Two of the projects are fully client-side single-file apps — nothing to
+install. The launcher clones the repo and opens `index.html` in your browser;
+all data lives in that browser's localStorage.
+
+- [invoice-manager](https://github.com/hossein-bozorg-zadeh/invoice-manager) —
+  Persian (RTL) invoice & finance manager, hosted at
+  <https://hossein-bozorg-zadeh.github.io/invoice-manager/>.
+- [wall-vault](https://github.com/hossein-bozorg-zadeh/wall-vault) — wallpaper
+  gallery with multi-source 4K backgrounds, search, favorites and a
+  lock-screen preview; images come from public APIs directly, keys/favorites
+  stay in localStorage, hosted at
+  <https://hossein-bozorg-zadeh.github.io/wall-vault/>.
+
+Same origin rules apply: the Pages copy and the local clone see different
+data.
 
 ### The Worker: run locally or deploy with a Cloudflare API token
 

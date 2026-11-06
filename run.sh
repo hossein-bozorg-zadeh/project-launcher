@@ -26,6 +26,7 @@ PROJECTS=(
   "tg-dl|tgdl|Download-manager Telegram bot (aria2 + yt-dlp + Telethon)"
   "subsource-telegram-bot|worker|SubSource subtitle bot on Cloudflare Workers"
   "invoice-manager|static|Persian invoice & finance manager — single-file HTML app"
+  "wall-vault|static|Wallpaper gallery — multi-source 4K backgrounds, single-file app"
 )
 
 c_green='\033[0;32m'; c_yellow='\033[1;33m'; c_cyan='\033[0;36m'; c_dim='\033[2m'; c_off='\033[0m'
@@ -292,6 +293,7 @@ run_tgdl() {
 
 # A fully client-side single-file app — nothing to install, just open it.
 run_static() {
+  _name="${1:-}"
   if [ ! -f index.html ]; then warn "index.html not found in the clone."; return 1; fi
   step "Opening the app in your default browser"
   case "$(uname -s)" in
@@ -302,8 +304,10 @@ run_static() {
     *)                    if have xdg-open; then xdg-open index.html
                           else warn "No xdg-open found — open index.html manually."; return 1; fi ;;
   esac
-  info "Data is saved in your browser's localStorage — also live at:"
-  info "https://$GITHUB_USER.github.io/invoice-manager/"
+  info "Data/keys are saved in your browser's localStorage."
+  if [ -n "$_name" ]; then
+    info "Also live at: https://$GITHUB_USER.github.io/$_name/"
+  fi
   return 0
 }
 
@@ -340,7 +344,7 @@ launch() {
     python) run_python ;;
     tgdl)   run_tgdl ;;
     worker) run_worker ;;
-    static) run_static ;;
+    static) run_static "$name" ;;
     *)      warn "Unknown project type: $type" ;;
   esac
 }
